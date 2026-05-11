@@ -10,13 +10,14 @@ The team's production source of truth for private repositories is Azure DevOps. 
 
 ## What needs to change to move to Azure DevOps
 
-There are exactly three URLs in this repo that point at GitHub:
+The only URLs in this repo that point at GitHub are documentation references in `README.md` and example URLs in scripts that need to fetch the repo at runtime. As of v2 (Terraform-based), no script fetches from the repo URL during cluster bring-up — Terraform reads the repo's `keys/authorized_keys` file from the local working copy. So the GitHub→AzDO migration is now purely a documentation update.
 
-1. **`vm-bootstrap/bootstrap.sh`** — the `AUTHORIZED_KEYS_URL` default.
-2. **`README.md`** — the example curl invocations in the Procedure section.
-3. **`workstation/03-add-node.sh`** — the prerequisites comment showing the bootstrap one-liner.
+Files to update when moving to Azure DevOps:
+1. **`README.md`** — any URLs in the Procedure or examples.
+2. **`docs/REPO-HOSTING.md`** — this file (update its own examples).
+3. **Anywhere the repo URL appears in a comment** (e.g., the `# Repository:` header in workstation scripts).
 
-Update all three, then push the changes to Azure DevOps. The rest of the repo is hosting-agnostic.
+After updating those, push to Azure DevOps. The rest of the repo is hosting-agnostic — Terraform, Ansible, Helm, and the scripts all work with the repo files on the local filesystem only.
 
 ## The Azure DevOps raw-file URL pattern
 

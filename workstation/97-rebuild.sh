@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Rebuild the cluster from scratch. Equivalent to:
+# Rebuild the cluster from scratch. Tears everything down (including the VMs)
+# then runs a clean build.
+#
+# Equivalent to:
 #   ./workstation/98-teardown.sh
 #   ./workstation/01-cluster-up.sh
-#
-# Use after major topology changes, or when troubleshooting requires a clean slate.
 
 set -euo pipefail
 

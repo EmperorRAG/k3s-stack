@@ -2,13 +2,13 @@
 
 A highly-available k3s cluster on Proxmox VE / Ubuntu Server 26.04, with kube-vip for the floating API endpoint, ingress-nginx + cert-manager + an internal CA for TLS, Rancher Manager for cluster governance, and Jenkins (in-cluster) for project-application CI/CD.
 
-This repo *is* the runbook. The scripts under `workstation/` and `vm-bootstrap/` execute the procedure end-to-end. This document is the narrative.
+This repo *is* the runbook. The scripts under `workstation/` and the HCL under `terraform/` execute the procedure end-to-end. This document is the narrative.
 
 ---
 
 ## What you get
 
-- **Three control-plane VMs** (`k3s-orchestrator`, `k3s-node-3001`, `k3s-node-3002`) running k3s with embedded etcd.
+- **Three control-plane VMs** (`k3s-orchestrator`, `k3s-node-3001`, `k3s-node-3002`) running k3s with embedded etcd, provisioned by Terraform from a Proxmox template.
 - **Floating API endpoint at `10.0.40.99`** owned by kube-vip; survives any single VM failure.
 - **Internal DNS** at `k3s-api.k3s.lan`, `rancher.k3s.lan`, `jenkins.k3s.lan` via pfSense Unbound host overrides.
 - **Internal CA** issuing real TLS certs to in-cluster services; browsers trust the cluster after a one-time CA import.
@@ -19,44 +19,24 @@ The cluster survives the loss of any single VM (including `k3s-orchestrator`) wi
 
 ---
 
-## Quick start (Dev Container)
-
-The fastest way to onboard is the **Dev Container** under `.devcontainer/`. It bundles Terraform, kubectl, Helm, and Ansible into a Linux container so nothing installs on your host machine.
-
-Prerequisites: Docker Desktop (macOS/Windows) or Docker Engine (Linux), VS Code, and the Dev Containers extension.
-
-1. Clone the repo and open it in VS Code.
-2. `ssh-add ~/.ssh/id_ed25519` on your host so the container can SSH to the VMs using your key.
-3. Command Palette → **Dev Containers: Reopen in Container**. First build ~3 minutes.
-4. When the new VS Code window opens, you have a terminal inside the container with every workstation tool on PATH. Skip to step 2 of the Procedure below (the tool install is already done).
-
-See `.devcontainer/README.md` for details.
-
-If you'd rather install tools directly on your host machine instead, follow the Procedure as written — `workstation/00-install-tools.sh` handles that path.
-
----
-
 ## Prerequisites
 
 **Workstation:**
 - Linux, macOS, or Windows with WSL2.
 - `git`, `curl`, an SSH client.
 - The repo cloned locally (you are reading the README inside it).
-- A public SSH key to commit to `keys/authorized_keys` (see Section 2).
+- A public SSH key to commit to `keys/authorized_keys` (see step 2 below).
 
 **Environment:**
-- Proxmox VE host with an Ubuntu Server 26.04 template that:
-  - Has a user `mark` with passwordless sudo.
-  - Has cloud-init network management disabled.
-  - Comes up with working DHCP, DNS, and `curl` + `ca-certificates` installed.
-- pfSense gateway at `10.0.40.1` with **MSS clamping configured** for the OpenVPN WAN. (If MSS clamping isn't in place, TLS will hang silently. See `docs/MTU-NOTE.md`.)
-- Three VMs cloned from the template:
-
-| Hostname | VMID | IP |
-|---|---|---|
-| k3s-orchestrator | 3000 | 10.0.40.100 |
-| k3s-node-3001 | 3001 | 10.0.40.101 |
-| k3s-node-3002 | 3002 | 10.0.40.102 |
+- Proxmox VE host with an Ubuntu Server 26.04 **cloud-init-ready** template:
+  - `cloud-init` package installed.
+  - `cloud-init` drive attached to the template (Proxmox UI: VM → Hardware → Add → CloudInit Drive).
+  - `qemu-guest-agent` installed.
+  - Network device: virtio on `vmbr0`.
+  - User `mark` with passwordless sudo (the cloud-init image creates this automatically).
+  - See `docs/TERRAFORM.md` for a full template-prep checklist.
+- A Proxmox API token (created in the Proxmox UI; see step 3 below).
+- pfSense gateway at `10.0.40.1` with **MSS clamping configured** for the OpenVPN WAN. See `docs/MTU-NOTE.md`.
 
 ---
 
@@ -68,11 +48,11 @@ If you'd rather install tools directly on your host machine instead, follow the 
 ./workstation/00-install-tools.sh
 ```
 
-Installs Ansible, kubectl, and Helm on the workstation. Idempotent. Safe to re-run.
+Installs Ansible, kubectl, Helm, and Terraform on the workstation. Idempotent. Safe to re-run.
 
 ### 2. Add your SSH public key to the repo
 
-Open `keys/authorized_keys`, append your public key on a new line, commit, push. This file ends up in `mark`'s `~/.ssh/authorized_keys` on every VM, so any committed key gets cluster-wide SSH access. Removing access = remove the line, push, re-run the bootstrap (or just the common playbook).
+Append your public key to `keys/authorized_keys`, commit, push. Terraform reads this file at apply time and bakes the keys into each VM via cloud-init. Adding a key after a VM exists requires re-applying or recreating the VM.
 
 ```bash
 cat ~/.ssh/id_ed25519.pub >> keys/authorized_keys
@@ -81,46 +61,48 @@ git commit -m "Add operator SSH key"
 git push
 ```
 
-### 3. Set the Ansible Vault passphrase
+### 3. Create a Proxmox API token
 
-Edit `.k3s-stack-vault-pass` and set whatever passphrase you like. **This file is committed to the repo on purpose** — the secrets it protects are still encrypted, the passphrase being in-repo is a deliberate convenience for the early POC phase. See `docs/SECRETS.md` for the migration plan to HashiCorp Vault.
+In the Proxmox UI: **Datacenter → Permissions → API Tokens → Add**. Suggested values:
 
-### 4. Edit the secrets
+- User: `terraform@pve` (create the user first under **Permissions → Users** if it doesn't exist).
+- Token ID: `k3s-stack`.
+- Privilege Separation: leave **checked** (more secure).
+
+After saving, Proxmox displays the token secret **once** — copy it immediately.
+
+Grant the token the necessary permissions (**Datacenter → Permissions → Add → API Token Permission**):
+
+- Path: `/`
+- API Token: the one you just created
+- Role: `PVEVMAdmin` (sufficient for creating, modifying, and destroying VMs)
+
+### 4. Set the Ansible Vault passphrase and secrets
+
+Edit `.k3s-stack-vault-pass` and set whatever passphrase you like. **This file is committed to the repo on purpose** — see `docs/SECRETS.md` for the rationale and the migration plan to HashiCorp Vault.
+
+Then edit the vault to set the real values:
 
 ```bash
 ansible-vault edit ansible/secrets/vault.yml
 ```
 
-Set real values for the Rancher and Jenkins admin passwords. Save and close — the file is re-encrypted on save.
+Set:
+- `rancher_bootstrap_password` — initial Rancher admin password.
+- `jenkins_admin_password` — initial Jenkins admin password.
+- `proxmox_api_token_id` — e.g. `terraform@pve!k3s-stack`.
+- `proxmox_api_token_secret` — the UUID Proxmox showed you in step 3.
 
-### 5. Bring up the VMs (Proxmox console, ~30 seconds each)
+### 5. Configure Terraform for your environment
 
-For each of the three VMs, open the Proxmox console, log in as `mark`, and paste:
+Edit `terraform/terraform.tfvars`:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
-  | sudo bash -s -- <hostname> <ip>
-```
+- `proxmox_endpoint` — your Proxmox API URL, e.g. `https://10.0.40.5:8006/`.
+- `proxmox_node` — the Proxmox node name (the hypervisor host), e.g. `pve`.
+- `template_id` — VMID of your cloud-init-ready Ubuntu Server 26.04 template.
+- `template_node` — Proxmox node the template lives on.
 
-Substitute `<hostname>` and `<ip>` per VM (when the repo moves to Azure DevOps, swap the URL — see `docs/REPO-HOSTING.md`):
-
-```bash
-# On VM 3000:
-curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
-  | sudo bash -s -- k3s-orchestrator 10.0.40.100
-
-# On VM 3001:
-curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
-  | sudo bash -s -- k3s-node-3001 10.0.40.101
-
-# On VM 3002:
-curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
-  | sudo bash -s -- k3s-node-3002 10.0.40.102
-```
-
-(For a private GitHub repo, append a personal access token: `https://<TOKEN>@raw.githubusercontent.com/...`. For Azure DevOps, swap the URL to the AzDO `?api-version=...&download=true` form; see `docs/REPO-HOSTING.md`.)
-
-Each invocation configures the static IP, installs SSH and base packages, sets the hostname, and pulls the authorized keys from the repo. Total time per VM: well under a minute.
+The `vms` map already contains the three initial cluster members. To add or change VMs, edit this map; see `docs/TERRAFORM.md`.
 
 ### 6. Configure pfSense DNS (web UI, one-time)
 
@@ -134,18 +116,15 @@ In pfSense: **Services → DNS Resolver → General Settings → Host Overrides 
 
 ### 7. Bring the cluster up
 
-From the workstation:
-
 ```bash
 ./workstation/01-cluster-up.sh
 ```
 
-This runs Ansible playbooks against all three VMs to:
-- Install k3s in HA mode (3 servers with embedded etcd).
-- Deploy kube-vip, ingress-nginx, cert-manager.
-- Create the internal CA ClusterIssuer.
-- Install Rancher Manager (3 replicas).
-- Install Jenkins.
+This:
+1. Decrypts the Proxmox token from Ansible Vault.
+2. Runs `terraform apply` to clone the three VMs from the template, with cloud-init configuring the hostname, static IP, SSH keys, and base packages.
+3. Waits for SSH on every VM.
+4. Runs Ansible playbooks to install k3s in HA mode (3 servers with embedded etcd), deploy kube-vip, ingress-nginx, cert-manager, the internal CA, Rancher Manager, and Jenkins.
 
 End-to-end takes ~15-20 minutes depending on image-pull speed. Idempotent — re-runnable.
 
@@ -175,10 +154,11 @@ This walks you through stopping a VM, verifying cluster survival, and bringing i
 
 | Task | Command |
 |---|---|
-| Add a new node | Edit `ansible/inventory/hosts.yml`, then `./workstation/03-add-node.sh <hostname>` |
+| Add a new node | Edit `terraform/terraform.tfvars` and `ansible/inventory/hosts.yml`, then `./workstation/03-add-node.sh <hostname>` |
 | Re-deploy after manifest changes | `./workstation/01-cluster-up.sh` |
 | Edit secrets | `ansible-vault edit ansible/secrets/vault.yml` |
-| Tear it all down | `./workstation/98-teardown.sh` |
+| Tear down (uninstall k3s + destroy VMs) | `./workstation/98-teardown.sh` |
+| Tear down k3s only, keep VMs | `./workstation/98-teardown.sh --keep-vms` |
 | Rebuild from scratch | `./workstation/97-rebuild.sh` |
 | Check cluster health | `./workstation/04-status.sh` |
 
@@ -192,16 +172,23 @@ k3s-stack/
 ├── .k3s-stack-vault-pass              # Ansible Vault passphrase (committed; see docs/SECRETS.md)
 ├── .gitignore
 ├── workstation/
-│   ├── 00-install-tools.sh            # ansible, kubectl, helm
-│   ├── 01-cluster-up.sh               # full cluster build
+│   ├── 00-install-tools.sh            # ansible, kubectl, helm, terraform
+│   ├── 00b-install-terraform.sh       # terraform only (called by 00)
+│   ├── 01-cluster-up.sh               # full cluster build (terraform + ansible)
 │   ├── 02-extract-ca.sh               # pulls internal CA cert
-│   ├── 03-add-node.sh                 # adds a new node from inventory
+│   ├── 03-add-node.sh                 # adds a new node
 │   ├── 04-status.sh                   # health check
 │   ├── 97-rebuild.sh                  # teardown + cluster-up
-│   ├── 98-teardown.sh                 # uninstalls k3s on every node
+│   ├── 98-teardown.sh                 # uninstalls k3s, destroys VMs (--keep-vms to skip the destroy)
 │   └── 99-failover-drill.sh           # guided failover test
-├── vm-bootstrap/
-│   └── bootstrap.sh                   # the curl-and-pipe-bash target
+├── terraform/
+│   ├── versions.tf                    # provider versions
+│   ├── providers.tf                   # provider config
+│   ├── variables.tf                   # variable definitions
+│   ├── terraform.tfvars               # values (VM definitions, endpoint, etc.) — COMMITTED
+│   ├── main.tf                        # VM resources + cloud-init snippets
+│   ├── outputs.tf                     # VM IPs and IDs
+│   └── cloud-init-user-data.yaml.tftpl  # per-VM cloud-init template
 ├── ansible/
 │   ├── ansible.cfg
 │   ├── inventory/
@@ -221,12 +208,13 @@ k3s-stack/
 │   └── jenkins-tls.yaml
 ├── helm-values/
 │   ├── ingress-nginx-values.yaml
-│   ├── rancher-values.yaml.j2         # Jinja template (uses vault vars)
+│   ├── rancher-values.yaml.j2
 │   └── jenkins-values.yaml.j2
 ├── keys/
 │   └── authorized_keys                # operator SSH pubkeys
 └── docs/
     ├── ARCHITECTURE.md                # HA topology, design rationale
+    ├── TERRAFORM.md                   # template prep, state backend, day-two HCL ops
     ├── SECRETS.md                     # Ansible Vault now, HashiCorp Vault later
     ├── CA-TRUST.md                    # importing the internal CA into trust stores
     ├── REPO-HOSTING.md                # GitHub → Azure DevOps migration

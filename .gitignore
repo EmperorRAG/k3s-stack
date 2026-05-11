@@ -18,3 +18,13 @@ __pycache__/
 
 # Dev Container state (none currently, but reserved)
 .devcontainer/.cache/
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl.bak
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/crash.*.log
+# NOTE: terraform.tfvars IS committed (VM definitions are not secret).
+# NOTE: terraform/.terraform.lock.hcl IS committed (provider version lock).

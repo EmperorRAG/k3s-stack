@@ -1,0 +1,30 @@
+#cloud-config
+# Cloud-init user-data for k3s-stack VMs. Rendered per-VM by Terraform.
+# Hostname, IP, DNS, and SSH keys are set by the bpg/proxmox provider's
+# initialization{} block — this file handles only what doesn't fit there.
+
+hostname: ${hostname}
+fqdn: ${hostname}
+preserve_hostname: false
+
+package_update: true
+package_upgrade: false   # done idempotently by Ansible's 01-common.yml later
+
+packages:
+  - openssh-server
+  - wget
+  - ca-certificates
+  - curl
+  - qemu-guest-agent
+
+runcmd:
+  - systemctl enable --now ssh
+  - systemctl enable --now qemu-guest-agent
+  # Ensure /etc/hosts has a sensible 127.0.1.1 entry so sudo doesn't complain.
+  - |
+    if ! grep -qE "^127\.0\.1\.1\s+${hostname}" /etc/hosts; then
+      echo "127.0.1.1 ${hostname}" >> /etc/hosts
+    fi
+
+# Signal completion so `cloud-init status --wait` returns cleanly.
+final_message: "k3s-stack cloud-init complete after $UPTIME seconds"

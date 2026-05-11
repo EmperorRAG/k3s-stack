@@ -10,7 +10,16 @@ This is deliberate for the first version of the stack:
 - **Speed to first working cluster.** No new service (HashiCorp Vault) to stand up before the cluster exists.
 - **Familiar workflow.** Ansible Vault is built into Ansible. No new tooling for the team to learn while they're learning k3s.
 
-The trade-off: **anyone with read access to the repo can decrypt the secrets.** That's acceptable because the repo is private (GitHub private, later Azure DevOps private) and the secrets it holds are bootstrap-grade — initial Rancher and Jenkins admin passwords that the operator changes on first login, and the k3s join token which is only useful inside the LAN.
+The trade-off: **anyone with read access to the repo can decrypt the secrets.** That's acceptable because the repo is private (GitHub private, later Azure DevOps private) and the secrets it holds are bootstrap-grade — initial Rancher and Jenkins admin passwords that the operator changes on first login, the k3s join token which is only useful inside the LAN, and a Proxmox API token whose scope is limited to VM management on the lab Proxmox.
+
+## What's in the vault
+
+- `rancher_bootstrap_password` — initial Rancher admin password. Rancher forces a change on first login.
+- `jenkins_admin_password` — initial Jenkins admin password. Operator changes after first login.
+- `proxmox_api_token_id` — Proxmox API token identifier (e.g. `terraform@pve!k3s-stack`). Used by Terraform via the `PROXMOX_VE_API_TOKEN` env var; never written to HCL.
+- `proxmox_api_token_secret` — the UUID Proxmox generated for the token.
+
+The Proxmox token has whatever permissions you granted it when creating the token in the Proxmox UI — `PVEVMAdmin` on `/` is the recommended scope. The token can be rotated by creating a new one, updating both values in the vault, and revoking the old one in the Proxmox UI.
 
 ## Where we're going: HashiCorp Vault
 
@@ -33,12 +42,12 @@ The reason to move to HashiCorp Vault later, rather than stay on Ansible Vault f
 This is the rough shape, not a runbook. The runbook will be written when migration is actually next on the priority list.
 
 1. **Stand up Vault in the cluster.** Run Vault in HA mode (3 replicas with Raft storage) as a Helm chart deployment. Initialize and unseal.
-2. **Move existing secrets.** Move the contents of `ansible/secrets/vault.yml` into Vault. Update playbooks to read them from Vault at runtime (via the `community.hashi_vault` Ansible collection) instead of via vars_files.
+2. **Move existing secrets.** Move the contents of `ansible/secrets/vault.yml` into HashiCorp Vault. Update playbooks to read them at runtime (via the `community.hashi_vault` Ansible collection) instead of via vars_files.
 3. **Wire project applications to Vault.** Use the Vault Agent Injector or External Secrets Operator to make Vault secrets available as Kubernetes Secrets or mounted files inside Pods.
 4. **Decommission Ansible Vault.** Once all secrets have moved, delete `ansible/secrets/vault.yml` and `.k3s-stack-vault-pass`. The repo no longer contains any secrets at all (encrypted or otherwise).
 
 ## What this means for now
 
-- **Do edit `ansible/secrets/vault.yml`** with `ansible-vault edit ansible/secrets/vault.yml` and set real bootstrap passwords before running `01-cluster-up.sh`.
+- **Do edit `ansible/secrets/vault.yml`** with `ansible-vault edit ansible/secrets/vault.yml` and set real values before running `01-cluster-up.sh`.
 - **Don't put project-application secrets** (DB passwords, API keys) in Ansible Vault. Wait for HashiCorp Vault. In the meantime, Kubernetes Secrets created by `kubectl` directly are an acceptable interim measure for project apps — they aren't committed to git.
 - **Do change `.k3s-stack-vault-pass`** from its placeholder value to something specific to your environment. It's still in the repo, but a unique passphrase per environment means a leaked repo from one environment doesn't compromise another.

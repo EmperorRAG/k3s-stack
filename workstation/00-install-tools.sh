@@ -1,24 +1,12 @@
 #!/usr/bin/env bash
 #
-# Install Ansible, kubectl, and Helm on the operator's workstation.
+# Install all workstation tooling: Ansible, kubectl, Helm, Terraform.
 # Linux/macOS only. Windows users should run this inside WSL2.
 # Idempotent.
 
 set -euo pipefail
 
-# ---------- devcontainer detection ----------
-# If we're inside the dev container, every tool was installed at container build
-# time via Dev Container Features. Nothing to do here.
-if [[ -n "${REMOTE_CONTAINERS:-}" || -n "${CODESPACES:-}" || -f "/.dockerenv" && -d "/workspaces" ]]; then
-  echo "[install] Running inside a dev container — tools are already installed."
-  echo "[install] Versions:"
-  ansible --version 2>/dev/null | head -1 || echo "  ansible: not found"
-  kubectl version --client --output=yaml 2>/dev/null | grep gitVersion | head -1 || echo "  kubectl: not found"
-  helm version --short 2>/dev/null || echo "  helm: not found"
-  terraform version 2>/dev/null | head -1 || echo "  terraform: not found"
-  exit 0
-fi
-
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------- detect platform ----------
 
@@ -120,9 +108,13 @@ install_kubectl
 install_helm
 install_ansible_collections
 
+# Terraform is installed by a sibling script so its install logic stays self-contained.
+"$REPO_ROOT/workstation/00b-install-terraform.sh"
+
 echo
 echo "[install] Done."
 echo "[install] Versions:"
 ansible --version | head -1
 kubectl version --client --output=yaml 2>/dev/null | grep gitVersion | head -1 || kubectl version --client 2>&1 | head -1
 helm version --short
+terraform version | head -1
