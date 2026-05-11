@@ -6,6 +6,20 @@
 
 set -euo pipefail
 
+# ---------- devcontainer detection ----------
+# If we're inside the dev container, every tool was installed at container build
+# time via Dev Container Features. Nothing to do here.
+if [[ -n "${REMOTE_CONTAINERS:-}" || -n "${CODESPACES:-}" || -f "/.dockerenv" && -d "/workspaces" ]]; then
+  echo "[install] Running inside a dev container — tools are already installed."
+  echo "[install] Versions:"
+  ansible --version 2>/dev/null | head -1 || echo "  ansible: not found"
+  kubectl version --client --output=yaml 2>/dev/null | grep gitVersion | head -1 || echo "  kubectl: not found"
+  helm version --short 2>/dev/null || echo "  helm: not found"
+  terraform version 2>/dev/null | head -1 || echo "  terraform: not found"
+  exit 0
+fi
+
+
 # ---------- detect platform ----------
 
 OS="$(uname -s)"

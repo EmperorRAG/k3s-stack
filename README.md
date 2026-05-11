@@ -19,6 +19,23 @@ The cluster survives the loss of any single VM (including `k3s-orchestrator`) wi
 
 ---
 
+## Quick start (Dev Container)
+
+The fastest way to onboard is the **Dev Container** under `.devcontainer/`. It bundles Terraform, kubectl, Helm, and Ansible into a Linux container so nothing installs on your host machine.
+
+Prerequisites: Docker Desktop (macOS/Windows) or Docker Engine (Linux), VS Code, and the Dev Containers extension.
+
+1. Clone the repo and open it in VS Code.
+2. `ssh-add ~/.ssh/id_ed25519` on your host so the container can SSH to the VMs using your key.
+3. Command Palette → **Dev Containers: Reopen in Container**. First build ~3 minutes.
+4. When the new VS Code window opens, you have a terminal inside the container with every workstation tool on PATH. Skip to step 2 of the Procedure below (the tool install is already done).
+
+See `.devcontainer/README.md` for details.
+
+If you'd rather install tools directly on your host machine instead, follow the Procedure as written — `workstation/00-install-tools.sh` handles that path.
+
+---
+
 ## Prerequisites
 
 **Workstation:**

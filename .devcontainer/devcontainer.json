@@ -1,0 +1,91 @@
+{
+  "name": "k3s-stack workstation",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+
+  // Tools installed via official Dev Container Features.
+  // Versions pinned so every operator gets the same toolchain.
+  // To bump: update the version strings and rebuild the container.
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "username": "mark",
+      "userUid": "automatic",
+      "userGid": "automatic",
+      "installZsh": false,
+      "configureZshAsDefaultShell": false,
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.10",
+      "tflint": "none",
+      "terragrunt": "none"
+    },
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "latest",
+      "helm": "latest",
+      "minikube": "none"
+    },
+    "ghcr.io/devcontainers-extra/features/ansible:2": {
+      "version": "latest"
+    }
+  },
+
+  // Forward the host's SSH agent into the container.
+  // On macOS, ensure your key is loaded: `ssh-add ~/.ssh/id_ed25519` before opening.
+  // Without this, the container can't SSH to the VMs.
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/mark/.ssh,type=bind,consistency=cached,readonly"
+  ],
+  "remoteEnv": {
+    // Ensures any SSH calls inside the container use the forwarded agent.
+    "SSH_AUTH_SOCK": "${localEnv:SSH_AUTH_SOCK}"
+  },
+
+  // The bind-mounted ~/.ssh above is read-only by design — we don't want
+  // the container scribbling on the host's known_hosts. A writable in-container
+  // path is added by the Dockerfile and SSH is told to use it via ssh_config.
+
+  "remoteUser": "mark",
+  "containerUser": "mark",
+  "updateRemoteUserUID": true,
+
+  // VS Code extensions that should be installed inside the container.
+  // These do NOT install on your macOS host — they run in the container.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "redhat.ansible",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker",
+        "timonwong.shellcheck"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "files.eol": "\n"
+      }
+    }
+  },
+
+  // Runs once after the container is built and the workspace is mounted.
+  // Installs Ansible collections used by playbooks.
+  "postCreateCommand": ".devcontainer/post-create.sh",
+
+  // Runs every time the container starts. Cheap things only.
+  "postStartCommand": "echo 'k3s-stack dev container ready. Tools: terraform, kubectl, helm, ansible.'",
+
+  // No port forwarding needed — all traffic is outbound (SSH to VMs, HTTPS to
+  // Proxmox/registries). Browser access to rancher.k3s.lan / jenkins.k3s.lan
+  // happens on the macOS host directly via pfSense DNS.
+
+  // Persist Terraform plugin cache and Ansible Galaxy cache so rebuilds are fast.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
+}

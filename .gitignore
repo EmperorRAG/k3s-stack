@@ -15,3 +15,6 @@ Thumbs.db
 # Local tooling caches
 __pycache__/
 *.pyc
+
+# Dev Container state (none currently, but reserved)
+.devcontainer/.cache/
