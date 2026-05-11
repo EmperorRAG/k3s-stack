@@ -65,14 +65,34 @@ If you *want* an existing VM to be recreated from the new template, taint it: `t
 
 The repo uses **local state** (`terraform/terraform.tfstate`, gitignored). This is fine for a single operator on a single workstation, and consistent with the rest of the POC's "simple now, hardened later" posture.
 
-When the time comes to move to multi-operator use:
+When the time comes to move to multi-operator use, the state needs to live somewhere shared. Azure DevOps is the team's choice for git hosting, but the team's broader policy keeps infrastructure services (storage, databases, secret stores) on self-hosted infrastructure. That means state lives on the cluster itself or on a small dedicated VM, not on a commercial cloud storage service.
 
-1. Provision an Azure Storage account + container for the state.
-2. Add a `backend "azurerm"` block to `versions.tf`.
-3. Run `terraform init -migrate-state` from the workstation that currently holds the state. Terraform copies local state to Azure Storage.
-4. Other operators run `terraform init` and pick up the same backend.
+Three self-hosted options exist, in order of preference:
 
-Native state locking (via Azure blob leases) prevents two operators applying at once.
+| Backend | Hosts where | Notes |
+|---|---|---|
+| **`pg` against in-cluster PostgreSQL** | A Postgres Pod on k3s | Strongest locking semantics (row-level locks via Postgres advisory locks). Postgres is the most likely shared service to appear on the cluster regardless — once it's there for any project app, it's the natural place for Terraform state. Recommended. |
+| **`http` against a small state server** | A `terraform-state-server` Pod on k3s, or any HTTP-backend-compatible service | Simple, single-purpose service. Native locking. Choose this if a Postgres dependency feels too heavy for state alone. |
+| **`s3` against in-cluster MinIO** | A MinIO Pod on k3s | Works if the team already wants S3-compatible object storage on-cluster for other reasons. Locking on the s3 backend requires a separate DynamoDB-compatible service or a tolerance for unlocked state — more moving parts than the alternatives. |
+
+The migration to remote state is a single configuration block change in `versions.tf` plus one `terraform init -migrate-state` invocation. It does not require rewriting anything else. The choice between the three backends can be deferred until the migration is actually scheduled.
+
+### Example: `pg` backend block
+
+```hcl
+terraform {
+  backend "pg" {
+    conn_str    = "postgres://terraform@postgres.k3s.lan/terraform_state?sslmode=verify-full"
+    schema_name = "k3s_stack"
+  }
+}
+```
+
+The password is supplied at runtime via `PGPASSWORD`, set by `workstation/01-cluster-up.sh` from Ansible Vault — the same pattern already used for the Proxmox API token. State is encrypted at rest by whatever encryption Postgres is configured for; TLS in transit comes from the cluster's internal CA.
+
+### Why not Azure Storage / Blob backend
+
+The Azure DevOps repo hosting is the only commercial cloud service in scope. Storage, databases, KMS, and other infrastructure services remain self-hosted. The Terraform Azure backends (`azurerm` storage account, etc.) are not used.
 
 ## Secrets
 
