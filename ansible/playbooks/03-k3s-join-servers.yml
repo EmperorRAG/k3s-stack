@@ -1,0 +1,107 @@
+---
+- name: Read join token from cluster-init server
+  hosts: k3s_servers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Skip non-init nodes
+      ansible.builtin.meta: end_host
+      when: not k3s_init_node | default(false)
+
+    - name: Read node-token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: token_file
+
+    - name: Stash token for cross-host use
+      ansible.builtin.set_fact:
+        k3s_join_token: "{{ token_file.content | b64decode | trim }}"
+
+- name: Join additional k3s servers
+  hosts: k3s_servers
+  become: true
+  gather_facts: false
+
+  vars:
+    k3s_join_token: "{{ hostvars['k3s-orchestrator']['k3s_join_token'] }}"
+    k3s_join_url: "https://{{ hostvars['k3s-orchestrator']['ansible_host'] }}:6443"
+
+  tasks:
+    - name: Skip the cluster-init server (already installed)
+      ansible.builtin.meta: end_host
+      when: k3s_init_node | default(false)
+
+    - name: Check if k3s is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Run k3s installer (server, joining existing cluster)
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_VERSION="{{ k3s_version }}" \
+          K3S_TOKEN="{{ k3s_join_token }}" \
+          K3S_URL="{{ k3s_join_url }}" \
+          K3S_KUBECONFIG_MODE="644" \
+          sh -s - server \
+            --server {{ k3s_join_url }} \
+            --tls-san {{ k3s_vip }} \
+            --tls-san {{ k3s_api_hostname }} \
+            --tls-san {{ ansible_host }} \
+            --node-ip {{ k3s_node_ip }} \
+            --write-kubeconfig-mode 644 \
+            --disable traefik \
+            --disable servicelb
+      args:
+        creates: /usr/local/bin/k3s
+      when: not k3s_binary.stat.exists
+
+    - name: Ensure k3s service is running and enabled
+      ansible.builtin.systemd:
+        name: k3s
+        state: started
+        enabled: true
+
+    - name: Make ~mark/.kube/config available on this peer too
+      block:
+        - ansible.builtin.file:
+            path: /home/mark/.kube
+            state: directory
+            owner: mark
+            group: mark
+            mode: '0700'
+
+        - ansible.builtin.slurp:
+            src: /etc/rancher/k3s/k3s.yaml
+          register: k3s_yaml_content
+
+        - ansible.builtin.copy:
+            content: |
+              {{
+                k3s_yaml_content.content
+                  | b64decode
+                  | replace('https://127.0.0.1:6443', 'https://' + k3s_api_hostname + ':6443')
+              }}
+            dest: /home/mark/.kube/config
+            owner: mark
+            group: mark
+            mode: '0600'
+
+- name: Verify cluster has all three control-plane members
+  hosts: k3s-orchestrator
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Wait for all three nodes to be Ready
+      ansible.builtin.shell: |
+        count=$(kubectl get nodes --no-headers 2>/dev/null | grep -E '\bReady\b' | wc -l)
+        [ "$count" -eq 3 ]
+      register: nodes_ready
+      until: nodes_ready.rc == 0
+      retries: 60
+      delay: 5
+      changed_when: false
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml

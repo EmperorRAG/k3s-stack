@@ -1,0 +1,46 @@
+---
+- name: Uninstall k3s from all agents first
+  hosts: k3s_agents
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check for agent uninstall script
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s-agent-uninstall.sh
+      register: agent_uninstall
+
+    - name: Run agent uninstall script
+      ansible.builtin.command: /usr/local/bin/k3s-agent-uninstall.sh
+      when: agent_uninstall.stat.exists
+      changed_when: true
+
+- name: Uninstall k3s from all servers
+  hosts: k3s_servers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check for server uninstall script
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s-uninstall.sh
+      register: server_uninstall
+
+    - name: Run server uninstall script
+      ansible.builtin.command: /usr/local/bin/k3s-uninstall.sh
+      when: server_uninstall.stat.exists
+      changed_when: true
+
+    - name: Remove ~mark/.kube directory
+      ansible.builtin.file:
+        path: /home/mark/.kube
+        state: absent
+
+    - name: Remove leftover k3s data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/rancher
+        - /var/lib/rancher
+        - /var/lib/kubelet

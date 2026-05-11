@@ -1,0 +1,47 @@
+---
+- name: Read join token from cluster-init server
+  hosts: k3s-orchestrator
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Read node-token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: token_file
+
+    - name: Stash token for cross-host use
+      ansible.builtin.set_fact:
+        k3s_join_token: "{{ token_file.content | b64decode | trim }}"
+
+- name: Install k3s agent on workers
+  hosts: k3s_agents
+  become: true
+
+  vars:
+    k3s_join_token: "{{ hostvars['k3s-orchestrator']['k3s_join_token'] }}"
+    k3s_join_url: "https://{{ k3s_vip }}:6443"
+
+  tasks:
+    - name: Check if k3s is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Run k3s installer (agent)
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_VERSION="{{ k3s_version }}" \
+          K3S_TOKEN="{{ k3s_join_token }}" \
+          K3S_URL="{{ k3s_join_url }}" \
+          sh -s - agent \
+            --node-ip {{ k3s_node_ip }}
+      args:
+        creates: /usr/local/bin/k3s
+      when: not k3s_binary.stat.exists
+
+    - name: Ensure k3s-agent service is running and enabled
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: started
+        enabled: true

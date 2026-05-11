@@ -1,0 +1,14 @@
+# Reference values for the Rancher Helm chart.
+# The actual install in playbooks/04-cluster-workloads.yml sets these inline
+# via kubernetes.core.helm's `values:` block.
+# This file exists so the configuration is discoverable from one place.
+
+hostname: "{{ rancher_hostname }}"
+bootstrapPassword: "{{ rancher_bootstrap_password }}"
+replicas: 3
+ingress:
+  tls:
+    source: secret
+  extraAnnotations:
+    cert-manager.io/cluster-issuer: cluster-internal-ca
+privateCA: true

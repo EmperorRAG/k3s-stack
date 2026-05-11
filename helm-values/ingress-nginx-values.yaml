@@ -1,0 +1,14 @@
+# Reference values for the ingress-nginx Helm chart.
+# The actual install in playbooks/04-cluster-workloads.yml sets these inline.
+# This file exists so the configuration is discoverable from one place.
+
+controller:
+  kind: DaemonSet
+  service:
+    type: NodePort
+    nodePorts:
+      http: 30080
+      https: 30443
+  hostNetwork: false
+  publishService:
+    enabled: true

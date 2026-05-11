@@ -1,0 +1,17 @@
+# Ansible runtime artifacts
+*.retry
+.ansible/
+
+# Local state we don't want committed
+cluster-internal-ca.crt
+k3s_token.txt
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local tooling caches
+__pycache__/
+*.pyc

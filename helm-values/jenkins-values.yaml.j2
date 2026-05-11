@@ -1,0 +1,38 @@
+controller:
+  adminUser: admin
+  adminPassword: "{{ jenkins_admin_password }}"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  ingress:
+    enabled: true
+    apiVersion: networking.k8s.io/v1
+    ingressClassName: nginx
+    hostName: "{{ jenkins_hostname }}"
+    tls:
+      - secretName: jenkins-tls
+        hosts:
+          - "{{ jenkins_hostname }}"
+  installPlugins:
+    - kubernetes
+    - workflow-aggregator
+    - git
+    - configuration-as-code
+    - docker-workflow
+    - blueocean
+    - credentials-binding
+    - timestamper
+
+persistence:
+  enabled: true
+  size: 20Gi
+
+serviceAccount:
+  create: true
+
+rbac:
+  create: true

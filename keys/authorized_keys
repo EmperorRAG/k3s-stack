@@ -1,0 +1,6 @@
+# Operator SSH public keys.
+# One key per line. Lines starting with # are comments.
+# Anyone with a key listed here gets SSH access as `mark` on every VM.
+# Add your key with:
+#   cat ~/.ssh/id_ed25519.pub >> keys/authorized_keys
+# then commit and push.

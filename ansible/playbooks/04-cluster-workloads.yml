@@ -1,0 +1,188 @@
+---
+- name: Install cluster workloads (ingress, cert-manager, internal CA, Rancher, Jenkins)
+  hosts: k3s-orchestrator
+  become: false
+  gather_facts: false
+
+  vars_files:
+    - ../secrets/vault.yml
+
+  environment:
+    KUBECONFIG: /home/mark/.kube/config
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Tooling: helm
+    # ------------------------------------------------------------------
+    - name: Install helm
+      become: true
+      ansible.builtin.shell: |
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Ensure kubectl symlink exists
+      become: true
+      ansible.builtin.file:
+        src: /usr/local/bin/k3s
+        dest: /usr/local/bin/kubectl
+        state: link
+        force: false
+      ignore_errors: true
+
+    # ------------------------------------------------------------------
+    # Helm repos
+    # ------------------------------------------------------------------
+    - name: Add helm repositories
+      kubernetes.core.helm_repository:
+        name: "{{ item.name }}"
+        repo_url: "{{ item.url }}"
+      loop:
+        - { name: jetstack,       url: "https://charts.jetstack.io" }
+        - { name: rancher-stable, url: "https://releases.rancher.com/server-charts/stable" }
+        - { name: jenkins,        url: "https://charts.jenkins.io" }
+        - { name: ingress-nginx,  url: "https://kubernetes.github.io/ingress-nginx" }
+
+    # ------------------------------------------------------------------
+    # ingress-nginx (DaemonSet, NodePort 30080/30443)
+    # ------------------------------------------------------------------
+    - name: Create ingress-nginx namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: ingress-nginx
+        state: present
+
+    - name: Install ingress-nginx
+      kubernetes.core.helm:
+        name: ingress-nginx
+        chart_ref: ingress-nginx/ingress-nginx
+        release_namespace: ingress-nginx
+        values:
+          controller:
+            kind: DaemonSet
+            service:
+              type: NodePort
+              nodePorts:
+                http: 30080
+                https: 30443
+            hostNetwork: false
+            publishService:
+              enabled: true
+
+    # ------------------------------------------------------------------
+    # cert-manager
+    # ------------------------------------------------------------------
+    - name: Create cert-manager namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: cert-manager
+        state: present
+
+    - name: Install cert-manager
+      kubernetes.core.helm:
+        name: cert-manager
+        chart_ref: jetstack/cert-manager
+        chart_version: v1.16.2
+        release_namespace: cert-manager
+        values:
+          crds:
+            enabled: true
+
+    - name: Wait for cert-manager rollout
+      ansible.builtin.command: >
+        kubectl -n cert-manager rollout status deploy/{{ item }} --timeout=3m
+      loop:
+        - cert-manager
+        - cert-manager-webhook
+        - cert-manager-cainjector
+      changed_when: false
+
+    # ------------------------------------------------------------------
+    # Internal CA
+    # ------------------------------------------------------------------
+    - name: Apply cluster internal CA manifest
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ playbook_dir }}/../../manifests/cluster-ca.yaml"
+
+    - name: Wait for the cluster-internal-ca Certificate to be Ready
+      ansible.builtin.shell: |
+        kubectl -n cert-manager get certificate cluster-internal-ca \
+          -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: ca_ready
+      until: ca_ready.stdout == "True"
+      retries: 30
+      delay: 5
+      changed_when: false
+
+    # ------------------------------------------------------------------
+    # Rancher Manager
+    # ------------------------------------------------------------------
+    - name: Create cattle-system namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: cattle-system
+        state: present
+
+    - name: Install Rancher
+      kubernetes.core.helm:
+        name: rancher
+        chart_ref: rancher-stable/rancher
+        release_namespace: cattle-system
+        values:
+          hostname: "{{ rancher_hostname }}"
+          bootstrapPassword: "{{ rancher_bootstrap_password }}"
+          replicas: 3
+          ingress:
+            tls:
+              source: secret
+            extraAnnotations:
+              cert-manager.io/cluster-issuer: cluster-internal-ca
+          privateCA: true
+
+    - name: Wait for Rancher rollout
+      ansible.builtin.command: >
+        kubectl -n cattle-system rollout status deploy/rancher --timeout=10m
+      changed_when: false
+
+    # ------------------------------------------------------------------
+    # Jenkins (project app CI/CD only)
+    # ------------------------------------------------------------------
+    - name: Create jenkins namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: jenkins
+        state: present
+
+    - name: Apply Jenkins TLS Certificate resource
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ playbook_dir }}/../../manifests/jenkins-tls.yaml"
+
+    - name: Render Jenkins values from template
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../helm-values/jenkins-values.yaml.j2"
+        dest: /tmp/jenkins-values.yaml
+        mode: '0600'
+
+    - name: Install Jenkins
+      kubernetes.core.helm:
+        name: jenkins
+        chart_ref: jenkins/jenkins
+        release_namespace: jenkins
+        values_files:
+          - /tmp/jenkins-values.yaml
+
+    - name: Wait for Jenkins rollout
+      ansible.builtin.command: >
+        kubectl -n jenkins rollout status statefulset/jenkins --timeout=10m
+      changed_when: false
+
+    - name: Clean up rendered values file
+      ansible.builtin.file:
+        path: /tmp/jenkins-values.yaml
+        state: absent

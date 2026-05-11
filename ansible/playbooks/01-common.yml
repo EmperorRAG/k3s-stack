@@ -1,0 +1,94 @@
+---
+- name: Common base configuration for all k3s nodes
+  hosts: k3s_cluster
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update apt cache and upgrade packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install base packages required by every node
+      ansible.builtin.apt:
+        name:
+          - wget
+          - curl
+          - ca-certificates
+          - vim
+          - htop
+          - net-tools
+          - gnupg
+          - lsb-release
+          - apt-transport-https
+          - jq
+          - iptables
+          - rsync
+          - python3-kubernetes  # needed by kubernetes.core modules from any peer
+        state: present
+
+    - name: Set timezone to UTC
+      community.general.timezone:
+        name: UTC
+
+    - name: Maintain /etc/hosts entries for all cluster members
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        block: |
+          10.0.40.99  k3s-api.k3s.lan
+          10.0.40.100 k3s-orchestrator
+          10.0.40.101 k3s-node-3001
+          10.0.40.102 k3s-node-3002
+        marker: "# {mark} ANSIBLE MANAGED: k3s cluster hosts"
+
+    # ---- Kubernetes prerequisites ----
+
+    - name: Disable swap now
+      ansible.builtin.command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+      changed_when: false
+
+    - name: Comment out swap entries in /etc/fstab
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*?\sswap\s+.*)$'
+        replace: '# \1'
+
+    - name: Load required kernel modules now
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Persist kernel modules across reboots
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+        mode: '0644'
+
+    - name: Apply Kubernetes-required sysctls
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+        reload: true
+        state: present
+      loop:
+        - { name: "net.bridge.bridge-nf-call-iptables",  value: "1" }
+        - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+        - { name: "net.ipv4.ip_forward",                 value: "1" }
+
+    - name: Ensure ufw is disabled (lab/private network)
+      community.general.ufw:
+        state: disabled
+      ignore_errors: true
+
+    - name: Verify hostname matches inventory
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"

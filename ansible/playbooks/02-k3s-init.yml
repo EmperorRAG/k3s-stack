@@ -1,0 +1,93 @@
+---
+- name: Install k3s on the cluster-init server
+  hosts: k3s_servers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Skip non-init nodes in this play
+      ansible.builtin.meta: end_host
+      when: not k3s_init_node | default(false)
+
+    - name: Ensure k3s manifests directory exists (for kube-vip auto-deploy)
+      ansible.builtin.file:
+        path: /var/lib/rancher/k3s/server/manifests
+        state: directory
+        mode: '0700'
+
+    - name: Place kube-vip manifest for auto-deploy at server start
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../manifests/kube-vip.yaml"
+        dest: /var/lib/rancher/k3s/server/manifests/kube-vip.yaml
+        mode: '0600'
+
+    - name: Check if k3s is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
+    - name: Run k3s installer (server, --cluster-init)
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | \
+          INSTALL_K3S_VERSION="{{ k3s_version }}" \
+          K3S_KUBECONFIG_MODE="644" \
+          sh -s - server \
+            --cluster-init \
+            --tls-san {{ k3s_vip }} \
+            --tls-san {{ k3s_api_hostname }} \
+            --tls-san {{ ansible_host }} \
+            --node-ip {{ k3s_node_ip }} \
+            --write-kubeconfig-mode 644 \
+            --disable traefik \
+            --disable servicelb
+      args:
+        creates: /usr/local/bin/k3s
+      when: not k3s_binary.stat.exists
+
+    - name: Wait for k3s to be ready (node Ready and API responsive)
+      ansible.builtin.shell: |
+        kubectl get nodes --no-headers | grep -E '\bReady\b' >/dev/null
+      register: k3s_ready
+      until: k3s_ready.rc == 0
+      retries: 60
+      delay: 5
+      changed_when: false
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+    - name: Wait for kube-vip to claim the VIP
+      ansible.builtin.shell: |
+        ip addr show ens18 | grep -F "{{ k3s_vip }}" >/dev/null
+      register: vip_up
+      until: vip_up.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Make ~mark/.kube/config available (points at VIP)
+      block:
+        - name: Ensure ~mark/.kube exists
+          ansible.builtin.file:
+            path: /home/mark/.kube
+            state: directory
+            owner: mark
+            group: mark
+            mode: '0700'
+
+        - name: Read system kubeconfig
+          ansible.builtin.slurp:
+            src: /etc/rancher/k3s/k3s.yaml
+          register: k3s_yaml_content
+
+        - name: Write per-user kubeconfig with VIP-based server URL
+          ansible.builtin.copy:
+            content: |
+              {{
+                k3s_yaml_content.content
+                  | b64decode
+                  | replace('https://127.0.0.1:6443', 'https://' + k3s_api_hostname + ':6443')
+              }}
+            dest: /home/mark/.kube/config
+            owner: mark
+            group: mark
+            mode: '0600'
