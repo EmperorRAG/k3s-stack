@@ -58,7 +58,7 @@ fi
 The operator then runs the Proxmox-console one-liner with the PAT inline:
 ```bash
 curl -fsSL -u ":$AZDO_PAT" "https://dev.azure.com/<org>/<project>/_apis/git/repositories/k3s-stack/items?path=/vm-bootstrap/bootstrap.sh&api-version=7.1&download=true" \
-  | AZDO_PAT="$AZDO_PAT" sudo -E bash -s -- k3s-orchestrator 10.0.40.100
+  | AZDO_PAT="$AZDO_PAT" sudo -E bash -s -- k3s-node-server-3011 10.0.40.111
 ```
 
 A short PAT with `Code (Read)` scope, valid for the duration of cluster provisioning, is the right token to issue here. Revoke it after.
@@ -68,7 +68,7 @@ A short PAT with `Code (Read)` scope, valid for the duration of cluster provisio
 While the repo is on private GitHub, the `raw.githubusercontent.com` URLs require a PAT. The cleanest approach is the same pattern:
 
 ```bash
-curl -fsSL -H "Authorization: token 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" "https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh" | sudo bash -s -- k3s-orchestrator 10.0.40.100
+curl -fsSL -H "Authorization: token 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" "https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh" | sudo bash -s -- k3s-node-server-3011 10.0.40.111
 ```
 
 If the repo is briefly *public* during POC (which some teams do), the URLs work with no auth at all. Easier but it does mean the repo's contents (including the encrypted vault file and the vault passphrase) are world-readable. The vault passphrase being in-repo is a deliberate trade-off for the POC phase only (see `SECRETS.md`); during a public phase, set the passphrase to something specific to this throwaway environment and rotate it before going private.

@@ -40,8 +40,8 @@ Edge and Chrome use the system trust store. Firefox needs its own import.
 If you need to `curl https://rancher.k3s.lan/` from inside one of the cluster VMs (e.g., from a shell script or a Pod that doesn't have the cluster CA in its image), copy the cert into the system trust store:
 
 ```bash
-scp cluster-internal-ca.crt mark@10.0.40.100:/tmp/
-ssh mark@10.0.40.100 'sudo mv /tmp/cluster-internal-ca.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates'
+scp cluster-internal-ca.crt mark@10.0.40.111:/tmp/
+ssh mark@10.0.40.111 'sudo mv /tmp/cluster-internal-ca.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates'
 ```
 
 Repeat for each peer if needed.

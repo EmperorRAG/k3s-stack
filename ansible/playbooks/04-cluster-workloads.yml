@@ -1,6 +1,6 @@
 ---
 - name: Install cluster workloads (ingress, cert-manager, internal CA, Rancher, Jenkins)
-  hosts: k3s-orchestrator
+  hosts: k3s_cluster_init
   become: false
   gather_facts: false
 

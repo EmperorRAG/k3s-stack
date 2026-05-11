@@ -9,10 +9,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_FILE="$REPO_ROOT/cluster-internal-ca.crt"
 
-echo "[extract-ca] Fetching internal CA cert from k3s-orchestrator"
+echo "[extract-ca] Fetching internal CA cert from k3s-node-server-3011"
 
 # Use SSH to run kubectl on the orchestrator (which has the kubeconfig).
-ssh mark@10.0.40.100 \
+ssh mark@10.0.40.111 \
   'sudo /usr/local/bin/k3s kubectl -n cert-manager get secret cluster-internal-ca-secret -o jsonpath="{.data.ca\.crt}"' \
   | base64 -d > "$OUT_FILE"
 

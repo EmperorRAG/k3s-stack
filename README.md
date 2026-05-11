@@ -8,14 +8,14 @@ This repo *is* the runbook. The scripts under `workstation/` and the HCL under `
 
 ## What you get
 
-- **Three control-plane VMs** (`k3s-orchestrator`, `k3s-node-3001`, `k3s-node-3002`) running k3s with embedded etcd, provisioned by Terraform from a Proxmox template.
-- **Floating API endpoint at `10.0.40.99`** owned by kube-vip; survives any single VM failure.
+- **Three control-plane VMs** (`k3s-node-server-3011`, `k3s-node-server-3021`, `k3s-node-server-3031`) running k3s with embedded etcd, provisioned by Terraform from a Proxmox template. Naming follows a rack/slot scheme — see `docs/ARCHITECTURE.md`.
+- **Floating API endpoint at `10.0.40.100`** owned by kube-vip; survives any single VM failure.
 - **Internal DNS** at `k3s-api.k3s.lan`, `rancher.k3s.lan`, `jenkins.k3s.lan` via pfSense Unbound host overrides.
 - **Internal CA** issuing real TLS certs to in-cluster services; browsers trust the cluster after a one-time CA import.
 - **Rancher Manager** at `https://rancher.k3s.lan/` (3 replicas, survives single-node failure).
 - **Jenkins** at `https://jenkins.k3s.lan/`, scoped to project-application CI/CD only.
 
-The cluster survives the loss of any single VM (including `k3s-orchestrator`) with no operator action.
+The cluster survives the loss of any single VM with no operator action.
 
 ---
 
@@ -106,7 +106,7 @@ The `vms` map already contains the three initial cluster members. To add or chan
 
 ### 6. Configure pfSense DNS (web UI, one-time)
 
-In pfSense: **Services → DNS Resolver → General Settings → Host Overrides → Add**. Add three entries, all pointing at `10.0.40.99`:
+In pfSense: **Services → DNS Resolver → General Settings → Host Overrides → Add**. Add three entries, all pointing at `10.0.40.100`:
 
 | Host | Domain |
 |---|---|

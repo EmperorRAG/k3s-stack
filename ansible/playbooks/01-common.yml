@@ -37,10 +37,10 @@
       ansible.builtin.blockinfile:
         path: /etc/hosts
         block: |
-          10.0.40.99  k3s-api.k3s.lan
-          10.0.40.100 k3s-orchestrator
-          10.0.40.101 k3s-node-3001
-          10.0.40.102 k3s-node-3002
+          10.0.40.100 k3s-api.k3s.lan
+          10.0.40.111 k3s-node-server-3011
+          10.0.40.121 k3s-node-server-3021
+          10.0.40.131 k3s-node-server-3031
         marker: "# {mark} ANSIBLE MANAGED: k3s cluster hosts"
 
     # ---- Kubernetes prerequisites ----

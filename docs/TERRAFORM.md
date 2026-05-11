@@ -47,7 +47,7 @@ Adding or removing a VM means editing both. This is a real maintenance burden, b
 ### Removing a VM
 
 1. Remove the entry from `ansible/inventory/hosts.yml` so future plays skip it.
-2. Drain and remove the node from k3s: `ssh mark@10.0.40.100 'sudo /usr/local/bin/k3s kubectl drain <hostname> --delete-emptydir-data --ignore-daemonsets --force'` then `kubectl delete node <hostname>`.
+2. Drain and remove the node from k3s: `ssh mark@10.0.40.111 'sudo /usr/local/bin/k3s kubectl drain <hostname> --delete-emptydir-data --ignore-daemonsets --force'` then `kubectl delete node <hostname>`.
 3. Remove the entry from `terraform/terraform.tfvars`.
 4. `cd terraform && terraform apply` — Terraform destroys the VM.
 
@@ -59,7 +59,7 @@ Edit the entry in `terraform.tfvars` (memory, cpu). `terraform apply` updates it
 
 If the template is rebuilt (new VMID), update `template_id` in `terraform.tfvars`. The `lifecycle { ignore_changes = [clone] }` block on the VM resource prevents existing VMs from being recreated when the template changes — Terraform leaves them as they are. New VMs created after the change will clone from the new template.
 
-If you *want* an existing VM to be recreated from the new template, taint it: `terraform -chdir=terraform taint 'proxmox_virtual_environment_vm.node["k3s-node-3001"]'`, then `terraform apply`.
+If you *want* an existing VM to be recreated from the new template, taint it: `terraform -chdir=terraform taint 'proxmox_virtual_environment_vm.node["k3s-node-server-3021"]'`, then `terraform apply`.
 
 ## State
 

@@ -76,7 +76,7 @@ spec:
             - { name: vip_leaseduration,   value: "5" }
             - { name: vip_renewdeadline,   value: "3" }
             - { name: vip_retryperiod,     value: "1" }
-            - { name: address,             value: "10.0.40.99" }
+            - { name: address,             value: "10.0.40.100" }
           securityContext:
             capabilities:
               add: ["NET_ADMIN", "NET_RAW"]

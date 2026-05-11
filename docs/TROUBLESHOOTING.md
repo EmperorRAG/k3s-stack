@@ -24,7 +24,7 @@
 
 **`02-k3s-init.yml` waits forever on "Wait for kube-vip to claim the VIP".**
 - The kube-vip manifest didn't auto-deploy. Check `ssh mark@10.0.40.100 'sudo /usr/local/bin/k3s kubectl -n kube-system get pods -l name=kube-vip-ds'`. If empty, check `sudo journalctl -u k3s | grep manifest`.
-- The VIP is held by something else on the LAN. Check `ip addr` from another machine on the LAN for `10.0.40.99`.
+- The VIP is held by something else on the LAN. Check `ip addr` from another machine on the LAN for `10.0.40.100`.
 
 **`03-k3s-join-servers.yml` fails — node joins but goes NotReady.**
 - Token mismatch. Try teardown + rebuild: `./workstation/97-rebuild.sh`.
