@@ -5,7 +5,7 @@
 # Prerequisites:
 #   1. VM provisioned in Proxmox from the template.
 #   2. Bootstrap run on the VM via the Proxmox console:
-#        curl -fsSL <repo>/raw/main/vm-bootstrap/bootstrap.sh \
+#        curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
 #          | sudo bash -s -- <hostname> <ip>
 #   3. The host entry added to ansible/inventory/hosts.yml under either
 #      k3s_servers.hosts (additional control-plane peer) or

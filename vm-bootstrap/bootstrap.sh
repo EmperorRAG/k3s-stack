@@ -24,7 +24,7 @@ set -euo pipefail
 
 # Adjust this URL when you swap GitHub for Azure DevOps. For a private GitHub repo,
 # embed a PAT: https://<TOKEN>@raw.githubusercontent.com/...
-AUTHORIZED_KEYS_URL="${AUTHORIZED_KEYS_URL:-https://raw.githubusercontent.com/CHANGEME/k3s-stack/main/keys/authorized_keys}"
+AUTHORIZED_KEYS_URL="${AUTHORIZED_KEYS_URL:-https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/keys/authorized_keys}"
 
 GATEWAY="10.0.40.1"
 DNS_SERVER="10.0.40.1"

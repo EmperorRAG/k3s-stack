@@ -10,12 +10,13 @@ The team's production source of truth for private repositories is Azure DevOps. 
 
 ## What needs to change to move to Azure DevOps
 
-There are exactly two URLs in this repo that point at GitHub:
+There are exactly three URLs in this repo that point at GitHub:
 
 1. **`vm-bootstrap/bootstrap.sh`** — the `AUTHORIZED_KEYS_URL` default.
 2. **`README.md`** — the example curl invocations in the Procedure section.
+3. **`workstation/03-add-node.sh`** — the prerequisites comment showing the bootstrap one-liner.
 
-Update both, then push the changes to Azure DevOps. The rest of the repo is hosting-agnostic.
+Update all three, then push the changes to Azure DevOps. The rest of the repo is hosting-agnostic.
 
 ## The Azure DevOps raw-file URL pattern
 
@@ -66,7 +67,7 @@ A short PAT with `Code (Read)` scope, valid for the duration of cluster provisio
 While the repo is on private GitHub, the `raw.githubusercontent.com` URLs require a PAT. The cleanest approach is the same pattern:
 
 ```bash
-curl -fsSL -H "Authorization: token $GITHUB_PAT" "https://raw.githubusercontent.com/<user>/<repo>/main/vm-bootstrap/bootstrap.sh" | sudo bash -s -- k3s-orchestrator 10.0.40.100
+curl -fsSL -H "Authorization: token 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" "https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh" | sudo bash -s -- k3s-orchestrator 10.0.40.100
 ```
 
 If the repo is briefly *public* during POC (which some teams do), the URLs work with no auth at all. Easier but it does mean the repo's contents (including the encrypted vault file and the vault passphrase) are world-readable. The vault passphrase being in-repo is a deliberate trade-off for the POC phase only (see `SECRETS.md`); during a public phase, set the passphrase to something specific to this throwaway environment and rotate it before going private.

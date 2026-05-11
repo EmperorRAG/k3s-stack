@@ -81,23 +81,23 @@ Set real values for the Rancher and Jenkins admin passwords. Save and close — 
 For each of the three VMs, open the Proxmox console, log in as `mark`, and paste:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<your-user>/<your-repo>/main/vm-bootstrap/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
   | sudo bash -s -- <hostname> <ip>
 ```
 
-Substitute `<your-user>` and `<your-repo>` for your GitHub coordinates (later, your Azure DevOps URL). Substitute `<hostname>` and `<ip>` per VM:
+Substitute `<hostname>` and `<ip>` per VM (when the repo moves to Azure DevOps, swap the URL — see `docs/REPO-HOSTING.md`):
 
 ```bash
 # On VM 3000:
-curl -fsSL https://raw.githubusercontent.com/<your-user>/<your-repo>/main/vm-bootstrap/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
   | sudo bash -s -- k3s-orchestrator 10.0.40.100
 
 # On VM 3001:
-curl -fsSL https://raw.githubusercontent.com/<your-user>/<your-repo>/main/vm-bootstrap/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
   | sudo bash -s -- k3s-node-3001 10.0.40.101
 
 # On VM 3002:
-curl -fsSL https://raw.githubusercontent.com/<your-user>/<your-repo>/main/vm-bootstrap/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/EmperorRAG/k3s-stack/main/vm-bootstrap/bootstrap.sh \
   | sudo bash -s -- k3s-node-3002 10.0.40.102
 ```
 
