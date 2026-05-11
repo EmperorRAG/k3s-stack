@@ -69,7 +69,11 @@
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
-        "files.eol": "\n"
+        "files.eol": "\n",
+        "ansible.validation.enabled": true,
+        "ansible.validation.lint.enabled": true,
+        "ansible.validation.lint.path": "/home/mark/.local/bin/ansible-lint",
+        "ansible.python.interpreterPath": "/usr/bin/python3"
       }
     }
   },

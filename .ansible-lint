@@ -1,0 +1,31 @@
+---
+# ansible-lint config for the k3s-stack repo.
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+# Limit linting to the playbooks directory; nothing else is Ansible content.
+exclude_paths:
+  - .git/
+  - .devcontainer/
+  - terraform/
+  - manifests/
+  - helm-values/
+  - workstation/
+  - keys/
+  - docs/
+  - cluster-internal-ca.crt
+
+# `production` profile catches the most issues; switch to `moderate` if it
+# turns out to be noisy on this codebase. Profiles documented at:
+# https://ansible.readthedocs.io/projects/lint/profiles/
+profile: production
+
+# Skip rules that don't apply to this style of repo.
+skip_list:
+  # `fqcn` would require fully-qualified collection names everywhere; we use
+  # them already for community modules but not for `ansible.builtin.*` aliases
+  # in a couple of places. Re-enable later if you want to be strict.
+  - fqcn[action-core]
+
+# Treat warnings as warnings, not errors. CI can opt-in to strict mode.
+warn_list:
+  - experimental

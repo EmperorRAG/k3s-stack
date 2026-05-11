@@ -12,6 +12,21 @@ ansible-galaxy collection install --upgrade \
     ansible.posix \
     kubernetes.core
 
+# ansible-lint is installed via pipx so its Ansible version pin doesn't
+# conflict with the system Ansible installed by the dev container feature.
+# pipx ensures the tool gets its own venv but stays on PATH.
+echo "[post-create] Installing ansible-lint via pipx"
+if ! command -v pipx >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq pipx
+fi
+# Force pipx to use user-writable directories. The ansible dev container
+# feature installs a system-level pipx whose venv root (/usr/local/py-utils)
+# is root-owned; setting these variables redirects everything to ~/.local so
+# `mark` can write without sudo. PIPX_BIN_DIR matches the lint path configured
+# in devcontainer.json: /home/mark/.local/bin/ansible-lint.
+PIPX_HOME="$HOME/.local/pipx" PIPX_BIN_DIR="$HOME/.local/bin" pipx install ansible-lint
+
 # The host's ~/.ssh is bind-mounted read-only at /home/mark/.ssh.
 # Set up a per-container writable SSH config that:
 #   - reads the host's keys/config via the bind mount
